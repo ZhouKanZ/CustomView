@@ -16,6 +16,8 @@ import android.view.View;
 
 import com.zkqueen.customview.R;
 
+import java.text.DecimalFormat;
+
 /**
  * Created by zhoukan on 2018/8/6.
  *
@@ -27,6 +29,7 @@ public class AngleSelector extends View {
 
     private float ringStartAngle = 135;
     private float ringSweepAngle = 270;
+    private float unableArea = 90;
 
     // 缺省值
     private float startAngle = 135;
@@ -34,6 +37,16 @@ public class AngleSelector extends View {
     private float endAngle = 335;
     private float relativeEndAngle = 200;
     private float sweepAngle;
+    // view的常规属性
+    private float laggerRadius = 200;
+    private float sencodRadius = 166;
+    private float thirdRadius = 119;
+    private int padding = 50;
+
+    private int textSize = 16;
+    private int textContentPaddingTop = 3;
+    private int textContentPaddingleft = 5;
+
 
     private int firstRingWidth = 56;
 
@@ -47,14 +60,17 @@ public class AngleSelector extends View {
     private RectF sencondTouchArea = new RectF();
 
 
-    private Paint paint, rectPaint;
+    private Paint paint, rectPaint, textPaint, anglePaint;
     private Paint boundPaint;
     private Bitmap pointer;
     private Matrix matrix;
 
     private int draggable = -1; // 0 表示第一个区间  1表示第二个区间
+    private int rotateDir = -1; // -1表示不动 0 表示角度增大的方向 1表示角度减小的方向
     private float[] lastPos = new float[2];
     private float[] currentPos = new float[2];
+    private Paint.FontMetrics fm1, fm2;
+    private DecimalFormat df = new DecimalFormat("0.0");
 
 
     public AngleSelector(Context context) {
@@ -72,23 +88,24 @@ public class AngleSelector extends View {
 
     private void init() {
 
+
         rectF1 = new RectF();
-        rectF1.left = 10;
-        rectF1.right = 410;
-        rectF1.top = 10;
-        rectF1.bottom = 410;
+        rectF1.left = padding;
+        rectF1.right = padding + laggerRadius * 2;
+        rectF1.top = padding;
+        rectF1.bottom = padding + laggerRadius * 2;
 
         rectF2 = new RectF();
-        rectF2.left = 44;
-        rectF2.right = 376;
-        rectF2.top = 44;
-        rectF2.bottom = 376;
+        rectF2.left = padding + laggerRadius - sencodRadius;
+        rectF2.right = padding + laggerRadius + sencodRadius;
+        rectF2.top = padding + laggerRadius - sencodRadius;
+        rectF2.bottom = padding + laggerRadius + sencodRadius;
 
         rectF3 = new RectF();
-        rectF3.left = 91;
-        rectF3.right = 329;
-        rectF3.top = 91;
-        rectF3.bottom = 329;
+        rectF3.left = padding + laggerRadius - thirdRadius;
+        rectF3.right = padding + laggerRadius + thirdRadius;
+        rectF3.top = padding + laggerRadius - thirdRadius;
+        rectF3.bottom = padding + laggerRadius + thirdRadius;
 
 
         paint = new Paint();
@@ -97,11 +114,17 @@ public class AngleSelector extends View {
         paint.setStrokeWidth(4);
         paint.setColor(Color.WHITE);
 
+        textPaint = new Paint();
+        textPaint.setAntiAlias(true);
+        textPaint.setStrokeWidth(16);
+        textPaint.setColor(Color.parseColor("#4f4e55"));
+//        textPaint.setColor(Color.WHITE);
+
         boundPaint = new Paint();
         boundPaint.setAntiAlias(true);
-        boundPaint.setStyle(Paint.Style.STROKE);
+        boundPaint.setStyle(Paint.Style.FILL);
         boundPaint.setStrokeWidth(1);
-        boundPaint.setColor(Color.RED);
+        boundPaint.setColor(Color.WHITE);
 
 
         rectPaint = new Paint();
@@ -110,10 +133,18 @@ public class AngleSelector extends View {
         rectPaint.setStrokeWidth(1);
         rectPaint.setColor(Color.RED);
 
+        anglePaint = new Paint();
+        anglePaint.setAntiAlias(true);
+        anglePaint.setStyle(Paint.Style.FILL);
+        anglePaint.setTextSize(38);
+        anglePaint.setColor(Color.WHITE);
+
         matrix = new Matrix();
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inScaled = false;
         pointer = BitmapFactory.decodeResource(getResources(), R.mipmap.point, options);
+
+        fm1 = textPaint.getFontMetrics();
 
 
     }
@@ -121,9 +152,9 @@ public class AngleSelector extends View {
     private void buildTouchRectArea(float angle, RectF rectF) {
         float[] aimPos = new float[2];
         // x
-        aimPos[0] = (float) (210 + 200 * Math.cos(angle * Math.PI / 180));
+        aimPos[0] = (float) (padding + laggerRadius + laggerRadius * Math.cos(angle * Math.PI / 180));
         // y
-        aimPos[1] = (float) (210 + 200 * Math.sin(angle * Math.PI / 180));
+        aimPos[1] = (float) (padding + laggerRadius + laggerRadius * Math.sin(angle * Math.PI / 180));
         rectF.left = aimPos[0] - halfWidth;
         rectF.top = aimPos[1] - halfWidth;
         rectF.right = aimPos[0] + halfWidth;
@@ -143,38 +174,43 @@ public class AngleSelector extends View {
         paint.setColor(Color.WHITE);
         canvas.drawArc(rectF1, ringStartAngle, ringSweepAngle, false, paint);
 
+        // paint.setColor(Color.RED);
+        // paint.setStrokeWidth(2);
+        // canvas.drawRect(rectF1,paint);
+
         // sweep angle
         paint.setStrokeWidth(firstRingWidth);
-        // todo first draw right arc
-        paint.setColor(Color.RED);
-
-        canvas.drawArc(rectF2, relativeStartAngle < endAngle ? startAngle:endAngle, Math.abs(relativeEndAngle - relativeStartAngle), false, paint);
-
-        // rest angle
         paint.setColor(Color.parseColor("#5a595e"));
-//        canvas.drawArc(rectF2, endAngle, 405 - endAngle, false, paint);
+        canvas.drawArc(rectF2, ringStartAngle, ringSweepAngle, false, paint);
+
+        // todo first draw right arc
+        paint.setColor(Color.WHITE);
+        canvas.drawArc(rectF2, relativeStartAngle < relativeEndAngle ? startAngle : endAngle, Math.abs(relativeEndAngle - relativeStartAngle), false, paint);
+        // paint.setColor(Color.RED);
+        // paint.setStrokeWidth(2);
+        // canvas.drawRect(rectF2,paint);
+        // rest angle
 
         paint.setColor(Color.parseColor("#419fff"));
         paint.setStrokeWidth(4);
-        canvas.drawCircle(210, 210, 130, paint);
+        canvas.drawCircle(padding + laggerRadius, padding + laggerRadius, 130, paint);
 
         paint.setColor(Color.parseColor("#5a595e"));
         paint.setStrokeWidth(20);
-        canvas.drawArc(rectF3, startAngle, endAngle - startAngle, false, paint);
+        canvas.drawArc(rectF3, relativeStartAngle < relativeEndAngle ? startAngle : endAngle, Math.abs(relativeEndAngle - relativeStartAngle), false, paint);
 
         paint.setColor(Color.parseColor("#2e2e2e"));
         paint.setStyle(Paint.Style.FILL);
-        canvas.drawCircle(210, 210, 42, paint);
+        canvas.drawCircle(padding + laggerRadius, padding + laggerRadius, 42, paint);
 
         paint.setColor(Color.parseColor("#383a3f"));
-        canvas.drawCircle(210, 210, 32, paint);
-
+        canvas.drawCircle(padding + laggerRadius, padding + laggerRadius, 32, paint);
 
         paint.setColor(Color.parseColor("#f3c02f"));
         paint.setStrokeWidth(7);
         paint.setStyle(Paint.Style.STROKE);
 
-        canvas.drawCircle(210, 210, 14, paint);
+        canvas.drawCircle(padding + laggerRadius, padding + laggerRadius, 14, paint);
 
         rotate(startAngle);
         canvas.drawBitmap(pointer, matrix, paint);
@@ -182,8 +218,31 @@ public class AngleSelector extends View {
         rotate(endAngle);
         canvas.drawBitmap(pointer, matrix, paint);
 
-        canvas.drawRect(firstTouchArea, rectPaint);
-        canvas.drawRect(sencondTouchArea, rectPaint);
+        // canvas.drawRect(firstTouchArea, rectPaint);
+        // canvas.drawRect(sencondTouchArea, rectPaint);
+        // canvas.drawCircle(padding + laggerRadius,padding + laggerRadius, laggerRadius+30,paint);
+
+        RectF rectF = new RectF();
+        for (int i = 0; i < 360; i = i + 45) {
+            String angle = String.valueOf(i - 135 < 0 ? 360 + i - 135 : i - 135);
+            float[] pos = getStartPosition(i);
+            float w = textPaint.measureText(angle);
+            rectF.left = pos[0] - w / 2 - textContentPaddingleft;
+            rectF.top = pos[1] + fm1.top - textContentPaddingTop;
+            rectF.bottom = pos[1] + fm1.bottom + textContentPaddingTop;
+            rectF.right = pos[0] - w / 2 + w + textContentPaddingleft;
+            if (i < 135 && i > 45) {
+                continue;
+            }
+            canvas.drawRoundRect(rectF, 5, 5, boundPaint);
+            canvas.drawText(angle, pos[0] - w / 2, pos[1], textPaint);
+        }
+
+        String angleDiff = String.valueOf(df.format(Math.abs(relativeEndAngle - relativeStartAngle))) + "°";
+        float[] centerText = getStartPosition(90);
+        float m = anglePaint.measureText(angleDiff);
+        canvas.drawText(angleDiff, centerText[0] - m / 2, centerText[1] - 30, anglePaint);
+
     }
 
     @Override
@@ -219,37 +278,64 @@ public class AngleSelector extends View {
         return true;
     }
 
+    //    /**
+    //     *  得到旋转方向
+    //     * @param currentPos
+    //     * @return
+    //     */
+    //    private void getRotateDir(float[] currentPos) {
+    //        double nowAngle = Math.atan2((currentPos[1] - 210), (currentPos[0] - 210));
+    //        double lastAngle = Math.atan2((lastPos[1] - 210), (lastPos[0] - 210));
+    //        if (nowAngle - lastAngle > 0){
+    //            rotateDir = 0;
+    //        }else {
+    //            rotateDir = 1;
+    //        }
+    //    }
+
     private void calcDistance(float[] currentPos, int type) {
 
         float angle;
 
-        double nowAngle = Math.atan2((currentPos[1] - 210), (currentPos[0] - 210));
+        double nowAngle = Math.atan2((currentPos[1] - padding - laggerRadius), (currentPos[0] - padding - laggerRadius));
         double sweepAngle = Math.toDegrees(nowAngle);
-        // (-PI,0]
+
         if (sweepAngle <= 0) {
             angle = (float) (360 + sweepAngle);
-            // [0,PI]
         } else {
             angle = (float) sweepAngle;
         }
 
-        if (type == 0){
+        if (angle >= 45 && angle <= 135) {
+            return;
+        }
+
+        if (type == 0) {
             startAngle = angle;
             // 得到相对坐标
             relativeStartAngle = getRelativeCoodinator(startAngle);
-        }else if (type == 1){
+            Log.d(TAG, "calcDistance: " + relativeStartAngle);
+        } else if (type == 1) {
             endAngle = angle;
             relativeEndAngle = getRelativeCoodinator(endAngle);
-            // 得到相对坐标
         }
+
         invalidate();
     }
 
+    private float[] getStartPosition(int i) {
+        //    200 ， 200 170
+        float[] pos = new float[2];
+        pos[0] = (float) (padding + laggerRadius + (laggerRadius + 30) * Math.cos(i * Math.PI / 180));
+        pos[1] = (float) (padding + laggerRadius + (laggerRadius + 30) * Math.sin(i * Math.PI / 180));
+        return pos;
+    }
+
     private float getRelativeCoodinator(float absAngle) {
-        if (absAngle<90){
-            return  225+absAngle;
-        }else {
-            return absAngle;
+        if (absAngle < 90) {
+            return 180 + (360 - ringSweepAngle) / 2 + absAngle;
+        } else {
+            return absAngle - ringStartAngle;
         }
     }
 
@@ -299,9 +385,9 @@ public class AngleSelector extends View {
 
     private void rotate(float angle) {
         matrix.reset();
-        matrix.postTranslate((float) (210 + 14 * Math.cos(angle * Math.PI / 180)), (float) (210 + 14 * Math.sin(angle * Math.PI / 180) - pointer.getHeight() / 2));
+        matrix.postTranslate((float) (padding + laggerRadius + 14 * Math.cos(angle * Math.PI / 180)), (float) (padding + laggerRadius + 14 * Math.sin(angle * Math.PI / 180) - pointer.getHeight() / 2));
         // 旋转指定的角度，并以圆环上的角度作为
-        matrix.postRotate(angle, (float) (210 + 14 * Math.cos(angle * Math.PI / 180)), (float) (210 + 14 * Math.sin(angle * Math.PI / 180)));
+        matrix.postRotate(angle, (float) (padding + laggerRadius + 14 * Math.cos(angle * Math.PI / 180)), (float) (padding + laggerRadius + 14 * Math.sin(angle * Math.PI / 180)));
         // touchable area had been sure
     }
 
